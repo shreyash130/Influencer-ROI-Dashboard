@@ -1,9 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 from io import BytesIO
 import os
 
@@ -147,14 +143,12 @@ col2.metric("Total Payout", f"₹{int(filtered['total_payout'].sum())}")
 col3.metric("Overall ROAS", f"{filtered['revenue'].sum()/filtered['total_payout'].sum():.2f}" if filtered['total_payout'].sum() else "-")
 col4.metric("Incremental ROAS", f"{((filtered['revenue'].sum()-baseline)/filtered['total_payout'].sum()):.2f}" if filtered['total_payout'].sum() else "-")
 
-# ---- Colorful Plotly Bar Chart ----
+# ---- Revenue and Payout by Influencer ----
 st.subheader("Revenue and Payout by Influencer")
 bar_data = filtered.groupby('name').agg({'revenue':'sum','total_payout':'sum'}).reset_index()
-fig_bar = go.Figure()
-fig_bar.add_trace(go.Bar(x=bar_data['name'], y=bar_data['revenue'], name='Revenue', marker_color='deepskyblue'))
-fig_bar.add_trace(go.Bar(x=bar_data['name'], y=bar_data['total_payout'], name='Payout', marker_color='salmon'))
-fig_bar.update_layout(barmode='group', xaxis_title="Influencer", yaxis_title="₹ Amount")
-st.plotly_chart(fig_bar, use_container_width=True)
+
+# Using Streamlit's native bar chart
+st.bar_chart(bar_data.set_index('name')[['revenue', 'total_payout']])
 
 # ---- Post performance ----
 st.subheader("Post Engagement (by Influencer and Platform)")
@@ -191,57 +185,3 @@ st.dataframe(filtered[['brand','campaign','name','platform','product','orders','
 
 # ---- Export to CSV ----
 st.download_button('Export Filtered Data as CSV', filtered.to_csv(index=False), file_name='filtered_data.csv')
-
-# ---- PDF Export (chart+table) ----
-def export_pdf(dataframe, persona_stats, top_inf):
-    buf = BytesIO()
-    with PdfPages(buf) as pdf:
-        # Main bar chart
-        fig, ax = plt.subplots(figsize=(8,5))
-        names = dataframe['name']
-        rev = dataframe['revenue']
-        payout = dataframe['total_payout']
-        ax.bar(names, rev, label='Revenue', color='deepskyblue')
-        ax.bar(names, payout, label='Payout', color='salmon', alpha=0.7)
-        ax.set_title('Revenue vs Payout by Influencer')
-        ax.legend()
-        plt.xticks(rotation=45, ha='right')
-        pdf.savefig(fig)
-        plt.close(fig)
-
-        # Campaign table
-        fig, ax = plt.subplots(figsize=(10,6))
-        ax.axis('off')
-        tbl = ax.table(
-            cellText=dataframe[['brand','campaign','name','platform','product','orders','revenue','total_payout','ROAS','incremental_ROAS']].values,
-            colLabels=['Brand','Campaign','Name','Platform','Product','Orders','Revenue','Payout','ROAS','Inc.ROAS'],
-            loc='center'
-        )
-        tbl.auto_set_font_size(False)
-        tbl.set_fontsize(8)
-        tbl.scale(1.1, 1.1)
-        pdf.savefig(fig)
-        plt.close(fig)
-
-        # Persona Table
-        fig, ax = plt.subplots()
-        ax.axis('off')
-        tbl = ax.table(cellText=[(k, f"{v:.2f}") for k, v in persona_stats.items()],
-                    colLabels=['Persona','Avg ROAS'])
-        pdf.savefig(fig)
-        plt.close(fig)
-
-        # Top influencer
-        fig, ax = plt.subplots()
-        ax.axis('off')
-        tbl = ax.table(
-            cellText=top_inf[['name','category','total_rev','payout_sum','orders_sum','roas','incr_roas']].round(2).values,
-            colLabels=['Name','Category','Revenue','Payout','Orders','ROAS','Inc.ROAS'])
-        pdf.savefig(fig)
-        plt.close(fig)
-
-    buf.seek(0)
-    return buf
-
-pdf_data = export_pdf(filtered, persona_stats, top_inf)
-st.download_button("Export Dashboard as PDF", pdf_data, file_name="influencer_dashboard.pdf", mime="application/pdf")
